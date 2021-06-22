@@ -378,8 +378,7 @@ class KCFTracker:
             mapp = fhog.PCAFeatureMaps(mapp)
             # size_patch为列表，保存裁剪下来的特征图的【长，宽，通道】
             self.size_patch = list(map(int, [mapp['sizeY'], mapp['sizeX'], mapp['numFeatures']]))
-            FeaturesMap = mapp['map'].reshape((self.size_patch[0] * self.size_patch[1],
-                                               self.size_patch[2])).T  # (size_patch[2], size_patch[0]*size_patch[1])
+            FeaturesMap = mapp['map'].reshape((self.size_patch[0] * self.size_patch[1], self.size_patch[2])).T
 
         else:  # 将 RGB 图变为单通道灰度图
             if z.ndim == 3 and z.shape[2] == 3:
@@ -473,12 +472,15 @@ class KCFTracker:
             if self._roi[1] + self._roi[3] <= 0:
                 self._roi[1] = -self._roi[3] + 2
 
-            # 更新尺度
+            # 更新尺度, scale_pi 为一个 tuple，形式为 (x,y)，其中 y = 0，x 为最大响应值在 scale_response 的下标
             scale_pi = self.detect_scale(image)
+            # scale_factors 就是尺度因子集合，长度为 33，里面保存的尺度因子用来对长宽进行缩放，
+            # 分别是对 1.05 取幂 (16,15,...,1,0,-1,...,-15,-16) 得到
             self.current_scale_factor = self.current_scale_factor * self.scale_factors[scale_pi[0]]
             if self.current_scale_factor < self.min_scale_factor:
                 self.current_scale_factor = self.min_scale_factor
 
+            # train_scale 用来对一维尺度滤波器进行训练，同时更新 roi 的尺度
             self.train_scale(image)
 
         if self._roi[0] >= image.shape[1] - 1:
@@ -577,6 +579,12 @@ class KCFTracker:
             # get the subwindow
             # 提取 以点 (cx, cy) 为中心，长宽分别为 patch_width, patch_height 的图像
             im_patch = extract_image(image, cx, cy, patch_width, patch_height)
+
+            if self.scale_model_height // self.cell_size <= 2:
+                self.scale_model_height += 2 * self.cell_size
+            if self.scale_model_width // self.cell_size <= 2:
+                self.scale_model_width += 2 * self.cell_size
+
             # 下面调整 img_patch 的大小统一为 (scale_model_width, scale_model_height)，方便我们提取出相同维度的 fhog 特征
             if self.scale_model_width > im_patch.shape[1]:
                 im_patch_resized = cv2.resize(im_patch, (self.scale_model_width, self.scale_model_height), None, 0, 0, 1)
@@ -604,6 +612,26 @@ class KCFTracker:
 
         # 对 xsf 矩阵进行 dft，也就是离散傅里叶变换
         return fftd(xsf, False, True)
+
+    # 检测当前图像尺度
+    def detect_scale(self, image):
+        Z = self.get_scale_sample(image)
+
+        # compute AZ in the paper
+        # 这里 Z 就是从要检测的区域提取出来的特征矩阵，A, Z 都是 (total_size, n_scales, 2) 大小的矩阵
+        # A_l * Z_l，其中 A_l 和 Z_l 表示的是 1 * n_scales 大小的向量
+        add_temp = cv2.reduce(cv2.mulSpectrums(Z, self.A, 0, conjB=False), 0, cv2.REDUCE_SUM)
+
+        # compute the final y
+        # 生成的 scale_response 是一个 shape 为 (1, 33) 的向量，表示对图像进行不同尺度的缩放（具体是 33 个尺度）之后，求出来的响应值
+        scale_response = cv2.idft(complexDivisionReal(add_temp, (self.B + self.scale_lambda)), None, cv2.DFT_REAL_OUTPUT)
+
+        # get the max point as the final scaling rate
+        # pv:响应最大值 pi:相应最大点的索引数组
+        # pi 的值为 (x, y)，其中 y = 0，x 为最大响应值在 scale_response 中的下标，比如 pi 为 (16, 0)
+        _, pv, _, pi = cv2.minMaxLoc(scale_response)
+
+        return pi
 
     # 训练尺度估计器
     def train_scale(self, image, ini=False):
@@ -640,25 +668,8 @@ class KCFTracker:
             self.A = cv2.addWeighted(self.A, (1 - self.scale_lr), new_A, self.scale_lr, 0)
             self.B = cv2.addWeighted(self.B, (1 - self.scale_lr), new_B, self.scale_lr, 0)
 
+        # 更新 roi 框
         self.update_roi()
-
-    # 检测当前图像尺度
-    def detect_scale(self, image):
-        Z = self.get_scale_sample(image)
-
-        # compute AZ in the paper
-        # 这里 Z 就是从要检测的区域提取出来的特征矩阵，A, Z 都是 (total_size, n_scales, 2) 大小的矩阵
-        # A_l * Z_l，其中 A_l 和 Z_l 表示的是 1 * n_scales 大小的向量
-        add_temp = cv2.reduce(cv2.mulSpectrums(Z, self.A, 0, conjB=False), 0, cv2.REDUCE_SUM)
-
-        # compute the final y
-        scale_response = cv2.idft(complexDivisionReal(add_temp, (self.B + self.scale_lambda)), None, cv2.DFT_REAL_OUTPUT)
-
-        # get the max point as the final scaling rate
-        # pv:响应最大值 pi:相应最大点的索引数组
-        _, pv, _, pi = cv2.minMaxLoc(scale_response)
-
-        return pi
 
     # 更新尺度
     def update_roi(self):
@@ -666,7 +677,8 @@ class KCFTracker:
         cx = self._roi[0] + self._roi[2] / 2.
         cy = self._roi[1] + self._roi[3] / 2.
 
-        # Recompute the ROI left-upper point and size
+        # current_scale_factor 在 kcf 的 update 方法中被更新，表示当前的尺度因子
+        # 使用当前尺度因子重新计算当前 roi 的 width 和 height
         self._roi[2] = self.base_width * self.current_scale_factor
         self._roi[3] = self.base_height * self.current_scale_factor
 

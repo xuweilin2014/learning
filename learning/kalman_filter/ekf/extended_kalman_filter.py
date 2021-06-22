@@ -1,14 +1,12 @@
 from __future__ import print_function
 import numpy as np
+import numdifftools as nd
+import math
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-from scipy.stats import norm
-from sympy import Symbol, symbols, Matrix, sin, cos, sqrt, atan2
 from sympy import init_printing
 
 init_printing(use_latex=True)
-import numdifftools as nd
-import math
 
 dataset = []
 
