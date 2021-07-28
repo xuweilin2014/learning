@@ -55,6 +55,9 @@ def generate_blur_kernel(length, angle):
 
             psf[i][j] = psfwdt + EPS - math.fabs(psf[i][j])
 
+            if psf[i][j] > 0 and psf[i][j] > EPS:
+                psf[i][j] += np.random.uniform(0, psf[i][j])
+
             if psf[i][j] < 0:
                 psf[i][j] = 0
 
@@ -84,25 +87,20 @@ def generate_blur_kernel(length, angle):
 
 
 if __name__ == '__main__':
-    blur_length = 25
+    blur_length = 35
 
-    kernel, anchor = generate_blur_kernel(blur_length, 45)
-    img = cv2.imread('cameramen.jpg')
-    cv2.imshow('old', img)
+    kernel, anchor = generate_blur_kernel(blur_length, 60)
+    img = cv2.imread('cameraman.jpg')
     # 锚点 anchor 决定了卷积核相对于生成目标点的位置。遍历图像中的每一个像素，以每一个像素为锚点，
     # 按照相对位置生成卷积范围，和卷积核对应元素相乘再求和得到目标图像中对应像素的值
     motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
-    cv2.imshow('result_45', motion_blur)
+    cv2.imwrite('../angle/imgs/cameraman_60.jpg', motion_blur)
 
-    kernel, anchor = generate_blur_kernel(blur_length, 90)
-    img = cv2.imread('cameramen.jpg')
-    cv2.imshow('old', img)
-    motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
-    cv2.imshow('result_90', motion_blur)
-
-    kernel, anchor = generate_blur_kernel(blur_length, 0)
-    img = cv2.imread('cameramen.jpg')
-    cv2.imshow('old', img)
-    motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
-    cv2.imshow('result_0', motion_blur)
-    cv2.waitKey(0)
+    # kernel, anchor = generate_blur_kernel(blur_length, 90)
+    # motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
+    # cv2.imwrite('lenna_90.jpg', motion_blur)
+    #
+    # kernel, anchor = generate_blur_kernel(blur_length, 0)
+    # motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
+    # cv2.imwrite('lenna_0.jpg', motion_blur)
+    # cv2.waitKey(0)
