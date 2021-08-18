@@ -160,6 +160,7 @@ class MeanShiftTracker:
     def color_distribution(self, img_patch):
         bins = self.bins
         h, w, c = img_patch.shape
+        # cd 即为颜色直方图特征向量，如果 c = 3，那么 cd 为 bins * 3，也就是将 rgb 颜色向量直接拼接
         cd = np.zeros(bins * c)
         center = np.round(np.array([w / 2, h / 2]))
         dist = np.zeros((h, w))

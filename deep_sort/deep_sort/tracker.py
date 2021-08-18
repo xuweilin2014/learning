@@ -156,7 +156,7 @@ class Tracker:
         # 进行 IoU 匹配，也就是说对级联匹配中没有匹配上的目标再进行 IoU 匹配
         # 虽然和级联匹配中使用的都是 min_cost_matching 作为核心，这里使用的 metric 是 iou cost 和以上不同
         matches_b, unmatched_tracks_b, unmatched_detections = linear_assignment.min_cost_matching(iou_matching.iou_cost, self.max_iou_distance, self.tracks,
-                detections, iou_track_candidates, unmatched_detections)
+                                                                                                  detections, iou_track_candidates, unmatched_detections)
 
         matches = matches_a + matches_b
         unmatched_tracks = list(set(unmatched_tracks_a + unmatched_tracks_b))
