@@ -7,6 +7,8 @@ from scipy.ndimage import zoom
 from skimage.transform import radon
 from sklearn.metrics import mean_squared_error
 from skimage.filters import window
+from statsmodels.graphics import tsaplots
+import librosa, librosa.display
 
 
 # 将图像转换到频域
@@ -81,15 +83,15 @@ def discrete_radon_transform(image):
     plt.imshow(image, cmap=plt.cm.Greys_r)
 
     plt.subplot(222)
-    # 将图像投影到通过原点，并且与 x 轴的角度为 30 度的直线上
-    projections = radon(image, theta=[60])
-    plt.plot(projections)
+    # 将图像投影到通过原点，并且与 x 轴的角度为 theta 度的直线上
+    projection = radon(image, theta=[60])
+    plt.plot(projection)
     plt.title("Projections at 60 degree")
     plt.xlabel("Projection axis")
     plt.ylabel("Intensity")
 
     projections = radon(image)
-    plt.subplot(212)
+    plt.subplot(223)
     plt.title("Radon transform\n(Sinogram)")
     plt.xlabel("Projection axis")
     plt.ylabel("Intensity")
@@ -99,6 +101,7 @@ def discrete_radon_transform(image):
     plt.show()
 
 # 使用三阶函数来对 radon 变换的结果进行拟合
+# 在运动模糊的方向，拟合结果与 radon 变换结果的 MSE 误差最大
 def poly_fit(image):
     image = zoom(image, 0.4)
 
