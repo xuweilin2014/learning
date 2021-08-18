@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 iterations = 100
-sigma = np.array([0.02, 0.1, 0.6, 0.44])
+sigma = np.array([0.02, 0.12, 0.6, 0.44])
 sensor_num = 3
 mu = 10
 weight = np.zeros(sensor_num)
@@ -40,7 +40,7 @@ for k in range(1, iterations + 1):
 x = np.linspace(1, iterations, iterations, dtype=int)
 plt.title('multi-sensor fusion')
 plt.plot(x, res, label='adaptive weighted')
-plt.plot(x, avg_res, label='avg')
+plt.plot(x, avg_res, label='average')
 plt.legend()
 plt.grid()
 plt.savefig("融合值.png", dpi=900, bbox_inches='tight')
