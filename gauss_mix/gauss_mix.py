@@ -45,7 +45,7 @@ CV_CN_MAX = 512
 FLT_EPSILON = 1.19209e-07
 
 
-class GuassInvoker():
+class GaussInvoker():
     def __init__(self, image, mask, gmm_model, mean_model, gauss_modes, nmixtures, lr, Tb, TB, Tg, var_init, var_min, var_max, prune, nchannels):
         self.image = image
         self.mask = mask
@@ -186,7 +186,7 @@ class GuassInvoker():
 
 
 # noinspection PyAttributeOutsideInit
-class GuassMixBackgroundSubtractor():
+class GaussMixBackgroundSubtractor():
     def __init__(self):
         self.frame_count = 0
         self.history = default_history
@@ -226,7 +226,7 @@ class GuassMixBackgroundSubtractor():
         return self.mask
 
     def parallel(self, row):
-        invoker = GuassInvoker(self.image, self.mask, self.gmm_model, self.mean_model, self.gauss_modes, self.nmixtures, self.lr,
+        invoker = GaussInvoker(self.image, self.mask, self.gmm_model, self.mean_model, self.gauss_modes, self.nmixtures, self.lr,
                                self.var_threshold, self.background_ratio, self.var_threshold_gen, self.var_init,
                                self.var_min, self.var_max, float(-self.lr * self.ct), self.nchannels)
         return invoker.calculate(row)
@@ -257,7 +257,7 @@ if __name__ == '__main__':
         # 如果没有检测到摄像头，报错
         raise Exception('Check if the camera is on.')
 
-    mog = GuassMixBackgroundSubtractor()
+    mog = GaussMixBackgroundSubtractor()
     frame_count = 0
     while cap.isOpened():
         catch, frame = cap.read()
