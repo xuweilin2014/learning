@@ -90,11 +90,11 @@ if __name__ == '__main__':
     blur_length = 35
 
     kernel, anchor = generate_blur_kernel(blur_length, 60)
-    img = cv2.imread('cameraman.jpg')
+    img = cv2.imread('peppers.jpg')
     # 锚点 anchor 决定了卷积核相对于生成目标点的位置。遍历图像中的每一个像素，以每一个像素为锚点，
     # 按照相对位置生成卷积范围，和卷积核对应元素相乘再求和得到目标图像中对应像素的值
     motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
-    cv2.imwrite('../angle/imgs/cameraman_60.jpg', motion_blur)
+    cv2.imwrite('../angle/imgs/peppers_60.jpg', motion_blur)
 
     # kernel, anchor = generate_blur_kernel(blur_length, 90)
     # motion_blur = cv2.filter2D(img, -1, kernel, anchor=anchor)
