@@ -13,6 +13,10 @@ import numba
 EPSILON = 1.19209e-09
 BINS = 30
 
+class ColorHistogram:
+    One = 1
+    Two = 2
+
 # 将图像转换到频域
 def convert_frequency(img):
     f = np.fft.fft2(img)
@@ -134,8 +138,9 @@ def poly_fit_angle(image):
     # plt.show()
     return np.argmax(errors)
 
+# noinspection PyShadowingNames
 @numba.jit(cache=True)
-def mean_shift_length(img, angle, original_img):
+def mean_shift_length(img, angle, original_img, radius=3, neighbors=8):
     if len(img.shape) == 2:
         img = np.reshape(img, img.shape + (1,))
 
@@ -145,7 +150,10 @@ def mean_shift_length(img, angle, original_img):
     step = 7
 
     # 计算目标模型的颜色直方图特征
-    target_model = color_distribution(img)
+    target_color = color_distribution(img, ColorHistogram.One)
+    # 计算目标模型的 LBP 直方图特征
+    target_lbp = local_binary_pattern(img, radius, neighbors)
+    target_model = np.concatenate((target_color, target_lbp), axis=0)
     max_coef = 0
     blur_len = 1
 
@@ -154,9 +162,11 @@ def mean_shift_length(img, angle, original_img):
         # 依据不同的模糊长度 len 产生不同的模糊核 kernel
         kernel, anchor = generate_blur_kernel(k, angle)
         motion_blur = cv2.filter2D(original_img, -1, kernel, anchor=anchor)
-        color_model = color_distribution(motion_blur)
+        candidate_color = color_distribution(motion_blur, ColorHistogram.One)
+        candidate_lbp = local_binary_pattern(motion_blur, radius, neighbors)
+        candidate_model = np.concatenate((candidate_color, candidate_lbp), axis=0)
         # 计算当前模糊长度生成的图片的颜色直方图模型与目标模型的相似度
-        coef = compute_bhattacharyya_coef(target_model, color_model)
+        coef = compute_bhattacharyya_coef(target_model, candidate_model)
         if coef > max_coef and k != 1:
             blur_len = k
             max_coef = coef
@@ -167,14 +177,19 @@ def compute_bhattacharyya_coef(p, q):
     return np.sum(np.sqrt(p * q))
 
 @numba.jit(cache=True)
-def color_distribution(img_patch):
+def color_distribution(img_patch, DIMENSION):
     bins = BINS
     h, w, c = img_patch.shape
 
-    # 如果使用一维的颜色直方图特征
-    # cd 即为颜色直方图特征向量，如果 c = 3，那么 cd 为 bins * 3，也就是将 rgb 颜色向量直接拼接
-    cd = np.zeros((bins, bins))
-    img_patch = cv2.cvtColor(img_patch, cv2.COLOR_BGR2HSV)
+    if DIMENSION == ColorHistogram.One:
+        # 如果使用一维的颜色直方图特征
+        # cd 即为颜色直方图特征向量，如果 c = 3，那么 cd 为 bins * 3，也就是将 rgb 颜色向量直接拼接
+        cd = np.zeros(bins * c)
+    else:
+        # 如果使用二维的颜色直方图特制的
+        # cd 应该为一个 (bins, bins) 大小的矩阵，并且第一维是 hue 特征，第二维是 saturation 特征
+        cd = np.zeros((bins, bins))
+        img_patch = cv2.cvtColor(img_patch, cv2.COLOR_BGR2HSV)
 
     center = np.round(np.array([w / 2, h / 2]))
     dist = np.zeros((h, w))
@@ -190,27 +205,108 @@ def color_distribution(img_patch):
 
     # 下面把 1-dimension 和 2-dimension 区分开是为了方便 @jit 进行加速处理
     # build the histogram and weight with the kernel
-    for i in range(h):
-        for j in range(w):
-            d = dist[i, j] * dist[i, j]
-            if d < 1:
-                kE = 2 / np.pi * (1 - d)
-            else:
-                kE = 0
-            # 如果使用二维的颜色直方图特征，也就是一个 hue-saturation 矩阵
-            # img_patch[i,j,0] 表示 hsv 中的 hue 分量，img_patch[i,j,1] 表示 hsv 中的 saturation 分量
-            h_index = np.int(img_patch[i, j, 0] / 180 * bins)
-            s_index = np.int(img_patch[i, j, 1] / 255 * bins)
-            h_index = h_index - 1 if h_index == bins else h_index
-            s_index = s_index - 1 if s_index == bins else s_index
+    if DIMENSION == ColorHistogram.One:
+        for i in range(h):
+            for j in range(w):
+                # use Epachnikov kernel function
+                # 如果 ||x|| <= 1, k(x) = 1 - x
+                # 如果 ||x|| > 1, k(x) = 0
+                if dist[i, j] ** 2 < 1:
+                    kE = 2 / np.pi * (1 - dist[i, j] ** 2)
+                else:
+                    kE = 0
 
-            cd[h_index, s_index] += kE
+                for k in range(c):
+                    # compute which bin is corresponding to the pixel value
+                    index = np.int(img_patch[i, j, k] / 255 * bins)
+                    index = index - 1 if index == bins else index
+
+                    # add the kernel value to the bin
+                    cd[k * bins + index] += kE
+
+    if DIMENSION == ColorHistogram.Two:
+        for i in range(h):
+            for j in range(w):
+                if dist[i, j] ** 2 < 1:
+                    kE = 2 / np.pi * (1 - dist[i, j] ** 2)
+                else:
+                    kE = 0
+                # 如果使用二维的颜色直方图特征，也就是一个 hue-saturation 矩阵
+                # img_patch[i,j,0] 表示 hsv 中的 hue 分量，img_patch[i,j,1] 表示 hsv 中的 saturation 分量
+                h_index = np.int(img_patch[i, j, 0] / 180 * bins)
+                s_index = np.int(img_patch[i, j, 1] / 255 * bins)
+                h_index = h_index - 1 if h_index == bins else h_index
+                s_index = s_index - 1 if s_index == bins else s_index
+
+                cd[h_index, s_index] += kE
 
     # normalize the kernel value
     cd = cd / np.sum(cd)
     cd[cd <= EPSILON] = EPSILON
 
     return cd
+
+@numba.jit(cache=True)
+def local_binary_pattern(img, radius=3, neighbors=8, span=15):
+    img = img[:,:,0]
+    h, w = img.shape
+
+    length = 1 << neighbors
+    rows = int(np.ceil(h / span))
+    cols = int(np.ceil(w / span))
+    hist = np.zeros(length * rows * cols)
+
+    # LBP 算法是根据半径为 radius 的邻域的圆中所有点，计算出一个值，
+    # 所以新生成的图像高和宽相比于之前都会减少 radius
+    dst = np.zeros((h - 2 * radius, w - 2 * radius), dtype=img.dtype)
+    for i in range(radius, h - radius):
+        for j in range(radius, w - radius):
+            # 获得中心像素点的灰度值
+            center = img[i, j]
+            for k in range(neighbors):
+                # 计算采样点对于中心点坐标的偏移量 rx，ry
+                rx = radius * np.cos(2.0 * np.pi * k / neighbors)
+                ry = radius * np.sin(2.0 * np.pi * k / neighbors)
+                # 为双线性插值做准备
+                # 对采样点偏移量分别进行上下取整
+                x1 = int(np.floor(rx))
+                x2 = int(np.ceil(rx))
+                y1 = int(np.floor(ry))
+                y2 = int(np.ceil(ry))
+                # 将坐标偏移量映射到 0-1 之间
+                tx = rx - x1
+                ty = ry - y1
+                # 根据 0-1 之间的 x，y 的权重计算公式计算权重，权重与坐标具体位置无关，与坐标间的差值有关
+                w1 = (1 - tx) * (1 - ty)
+                w2 = tx * (1 - ty)
+                w3 = (1 - tx) * ty
+                w4 = tx * ty
+                # 根据双线性插值公式计算第 k 个采样点的灰度值
+                neighbor = img[i + y1, j + x1] * w1 + img[i + y1, j + x2] * w2 + img[i + y2, j + x1] * w3 + img[i + y2, j + x2] * w4
+                # LBP 特征图像的每个邻域的 LBP 值累加，累加通过与操作完成，对应的 LBP 值通过移位取得
+                dst[i - radius, j - radius] |= (neighbor > center) << np.uint8(neighbors - k - 1)
+
+            # 进行旋转不变处理
+            # Maenpaa 等人又将 LBP算子进行了扩展，提出了具有旋转不变性的 LBP 算子，
+            # 即不断旋转圆形邻域得到一系列初始定义的 LBP值，取其最小值作为该邻域的 LBP 值。
+            cur_val = dst[i - radius, j - radius]
+            min_val = cur_val
+            for k in range(1, neighbors):
+                # 对二进制编码进行【循环左移】，意思即选取移动过程中二进制码最小的那个作为最终值
+                temp = np.uint8(cur_val >> (neighbors - k)) | np.uint8(cur_val << k)
+                if temp < min_val:
+                    min_val = temp
+
+            # 在这里就是将图像分成不同的小区域，每一个区域有 (span*span) 个像素，每一个区域生成一个含有 256 个分量的直方图或者说特征向量，然后将
+            # 所有的区域的特征向量合并起来并且正则化，最后得到图像的特征向量
+            r = int(np.floor(i / span))
+            c = int(np.floor(j / span))
+            index = int(min_val / 255 * length)
+            index = index - 1 if index == length else index
+            hist[(r * rows + c) * length + index] += 1
+
+    hist = hist / np.sum(hist)
+    return hist
 
 if __name__ == '__main__':
     # 直接读为灰度图像
