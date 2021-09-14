@@ -4,6 +4,7 @@ from numba import jit
 import random
 import matplotlib.pyplot as plt
 
+EPSILON = 1.19209e-09
 
 # noinspection PyUnusedLocal,PyShadowingNames
 def local_kurtosis(img, patch_size):
@@ -124,9 +125,75 @@ def gaussian_distribution(x_square, sigma):
     """
     return np.exp(-x_square / (2 * sigma)) / np.sqrt(2 * np.pi * sigma)
 
-def local_auto_correlation(img):
-    return img
+def local_auto_correlation(img, ksize=3, bins=36):
+    """
+        自己实现角点检测
 
+        params:
+            img:灰度图片
+            ksize：Sobel算子窗口大小
+
+        return：
+            corner：与源图像一样大小，角点处像素值设置为255
+    """
+    k = 0.04  # 响应函数 R 中的系数 k
+    threshold = 0.01  # 设定阈值
+    WITH_NMS = False  # 是否非极大值抑制
+
+    # 1、使用 Sobel 计算像素点 x,y 方向的梯度
+    h, w = img.shape[:2]
+    # Sobel 函数求完导数后会有负值，还有会大于 255 的值。而原图像是 uint8，即 8 位无符号数
+    # 所以 Sobel 建立的图像位数不够，会有截断。因此要使用 16 位有符号的数据类型，即 cv2.CV_16S
+    # cv2.Sobel(src, ddepth, dx, dy[, ksize])
+    # src: 输入图像
+    # ddepth: 输出图像深度
+    # dx, dy: dx = 1, dy = 0 时求 x 方向的一阶导数，当组合为 dx = 0, dy = 1 时，求 y 方向的一阶导数
+    # ksize: Sobel 算子的大小，必须是 1,3,5 或者 7
+    grad = np.zeros((h, w, 2), dtype=np.float32)
+    # 计算 Ix
+    grad[:, :, 0] = cv2.Sobel(img, cv2.CV_16S, 1, 0, ksize=3)
+    # 计算 Iy
+    grad[:, :, 1] = cv2.Sobel(img, cv2.CV_16S, 0, 1, ksize=3)
+
+    # 2、计算 Ix ^ 2, Iy ^ 2, Ix * Iy
+    m = np.zeros((h, w, 3), dtype=np.float32)
+    m[:, :, 0] = grad[:, :, 0] ** 2
+    m[:, :, 1] = grad[:, :, 1] ** 2
+    m[:, :, 2] = grad[:, :, 0] * grad[:, :, 1]
+
+    # 3、利用高斯函数对 Ix ^ 2, Iy ^ 2, Ix * Iy 进行滤波
+    m[:, :, 0] = cv2.GaussianBlur(m[:, :, 0], ksize=(ksize, ksize), sigmaX=2)
+    m[:, :, 1] = cv2.GaussianBlur(m[:, :, 1], ksize=(ksize, ksize), sigmaX=2)
+    m[:, :, 2] = cv2.GaussianBlur(m[:, :, 2], ksize=(ksize, ksize), sigmaX=2)
+    m = [np.array([[m[i, j, 0], m[i, j, 2]], [m[i, j, 2], m[i, j, 1]]]) for i in range(h) for j in range(w)]
+
+    # 4、计算局部特征结果矩阵 M 的特征值和响应函数 R(i,j) = det(M) - k(trace(M))^2  0.04 <= k <= 0.06
+    hist = np.zeros(bins)
+
+    counter = 0
+    for matrix in m:
+        eigen_values, eigen_vectors = np.linalg.eig(matrix)
+        vectors = eigen_vectors[np.argmin(eigen_values)]
+
+        if np.min(eigen_values) <= EPSILON:
+            continue
+
+        counter += 1
+        weight = np.sqrt(np.sqrt(np.max(eigen_values) / np.min(eigen_values)))
+
+        index = 0
+        if vectors[0] * vectors[1] > 0:
+            theta = (np.arctan(vectors[1] / vectors[0]) / np.pi) * 180
+            index = int((theta / 180) * bins - 1)
+            hist[index] += weight
+        elif vectors[0] * vectors[1] < 0:
+            theta = 180 - (np.arctan(np.abs(vectors[1] / vectors[0]))) * 180
+            index = int(theta / 180 * bins - 1)
+            hist[index] += weight
+
+    hist /= counter
+
+    return hist
 
 # noinspection PyShadowingNames
 def im2col(img, patch_size):
@@ -204,13 +271,23 @@ def plot_hist(data, xlabel='x label', ylabel='y label', title='title', cn=False,
     plt.show()
 
 if __name__ == '__main__':
-    img_path = 'race_60.jpg'
+    bins = 36
+    img_path = 'imgs/boat.jpeg'
     image = cv2.imread(img_path, 0)
     image = (image - np.min(image)) / (np.max(image) - np.min(image))
     patch_size = 11
 
-    magnitude_distribution(image)
+    hist_no_blur = local_auto_correlation(image, bins=bins)
 
-    # f1 = local_kurtosis(image, patch_size)
-    # f2 = gradient_histogram_span(image, patch_size)
-    # f3 = local_auto_correlation(image)
+    img_path = 'imgs/boat_35.jpeg'
+    image = cv2.imread(img_path, 0)
+    image = (image - np.min(image)) / (np.max(image) - np.min(image))
+
+    hist_blur = local_auto_correlation(image, bins=bins)
+
+    x = np.linspace(1, 36, 36)
+    plt.plot(x, hist_blur, label='blur', color='blue', marker='o', linestyle='-')
+    plt.plot(x, hist_no_blur, label='no blur', color='red', marker='o', linestyle='-')
+    plt.legend()
+    plt.show()
+
