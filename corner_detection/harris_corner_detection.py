@@ -48,7 +48,8 @@ def harris_detect(img, ksize=3):
     D, T = list(map(np.linalg.det, m)), list(map(np.trace, m))
     R = np.array([d - k * t ** 2 for d, t in zip(D, T)])
 
-    # 5、将计算出响应函数的值 R 要满足大于设定的阈值, 获取最大的 R 值
+    # 5、将计算出响应函数的值 R 要满足大于设定的阈值 (R_max * threshold)
+    # 获取最大的 R 值
     R_max = np.max(R)
     R = R.reshape(h, w)
     corner = np.zeros_like(R, dtype=np.uint8)
