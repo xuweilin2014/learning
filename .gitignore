@@ -133,3 +133,6 @@ dmypy.json
 .idea
 venv
 
+/blur/feature/blur_dataset
+/blur/feature/sharp_dataset
+

@@ -1,10 +1,11 @@
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-EPSILON = 1.19209e-09
+EPSILON = 1.19209e-06
 
-def local_auto_correlation(img_path, ksize=3, bins=36):
+
+def local_auto_correlation(img, ksize=3, bins=36):
     """
     使用自相关函数来表示一个信号在间隔一段时间之后和这个信号本身的相似程度，而运动模糊图像沿着模糊方向的自相关
     函数值比较小，而沿着垂直于模糊方向的自相关函数值比较大。因此可以使用这个特性来区分运动模糊和清晰图像
@@ -21,9 +22,6 @@ def local_auto_correlation(img_path, ksize=3, bins=36):
     threshold = 0.01
     # 是否非极大值抑制
     WITH_NMS = False
-
-    img = cv2.imread(img_path, 0)
-    img = (img - np.min(img)) / (np.max(img) - np.min(img))
 
     # 1、使用 Sobel 计算像素点 x,y 方向的梯度
     h, w = img.shape[:2]
@@ -85,13 +83,20 @@ def local_auto_correlation(img_path, ksize=3, bins=36):
 
     counter = 1 if counter == 0 else counter
     # 对得到的直方图向量 hist 进行标准化，最后就得到了特征向量 hist
-    hist /= np.sum(hist)
+    if np.sum(hist) > EPSILON:
+        hist /= np.sum(hist)
 
+    hist[np.isnan(hist).astype('int')] = np.min(hist[(~np.isnan(hist)).astype('int')])
     return hist
 
 def correlation_blur_feature_plot(img_path, blur_img_path, bins=36, patch_size=11):
-    hist_blur = local_auto_correlation(blur_img_path, bins=bins)
-    hist_no_blur = local_auto_correlation(img_path, bins=bins)
+    img_blur = cv2.imread(blur_img_path, 0)
+    img_blur = (img_blur - np.min(img_blur)) / (np.max(img_blur) - np.min(img_blur))
+    hist_blur = local_auto_correlation(img_blur, bins=bins)
+
+    img = cv2.imread(img_path, 0)
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+    hist_no_blur = local_auto_correlation(img, bins=bins)
 
     x = np.linspace(1, bins, bins)
     plt.plot(x, hist_blur, label='blur', color='red', marker='o', linestyle='-')

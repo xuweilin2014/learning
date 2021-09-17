@@ -1,8 +1,8 @@
-import cv2
-import numpy as np
+import warnings
+
 from auto_correlation.local_auto_correlation import *
-from numba import jit
-import matplotlib.pyplot as plt
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # noinspection PyUnusedLocal,PyShadowingNames
 """
@@ -13,16 +13,15 @@ im2col 函数的 sliding 模式，因此最终会生成 12321 （111 * 111）个
 然后根据 sigma 向量计算出直方图 hist(sigma)（bins 默认为 128），直方图的纵坐标就是像素的数量，然后进行归一化，
 最后得到的 128 维的特征 feature = hist(sigma)
 """
-def gradient_histogram_span(img_path, patch_size, bins=512):
+# noinspection PySimplifyBooleanCheck
+def gradient_histogram_span(img, patch_size, blur=False, bins=512, display=True):
     # 如果是模糊图像，那么使用红色
-    if img_path.find('blur') != -1:
+    if blur == True:
         color = 'red'
     # 如果是清晰图像，那么使用蓝色
     else:
         color = 'blue'
 
-    img = cv2.imread(img_path, 0)
-    img = (img - np.min(img)) / (np.max(img) - np.min(img))
     im_height, im_width = img.shape
 
     # 列差分运算，求出图像在 x 方向的梯度 Ix
@@ -56,17 +55,19 @@ def gradient_histogram_span(img_path, patch_size, bins=512):
     feature, _, _ = plt.hist(sigma, bins=bins, facecolor=color, range=(0, 0.5), edgecolor=color, alpha=0.7)
     # 对特征进行标准化
     feature /= np.sum(feature)
-    # 显示横轴标签
-    plt.xlabel('Value of sigma')
-    # 显示纵轴标签
-    plt.ylabel('Number of pixels')
-    # 显示图标题
-    plt.title('GMM Model Variance')
-    plt.show()
 
+    if display:
+        # 显示横轴标签
+        plt.xlabel('Value of sigma')
+        # 显示纵轴标签
+        plt.ylabel('Number of pixels')
+        # 显示图标题
+        plt.title('GMM Model Variance')
+        plt.show()
+
+    feature[np.isnan(feature).astype('int')] = np.min(feature[(~np.isnan(feature)).astype('int')])
     return feature
 
-@jit(cache=True)
 def em_gmm(data):
     """
     compute expectation for GMM with two Gaussian Component where mean are fixed as zero.
@@ -117,9 +118,14 @@ def gaussian_distribution(x_square, sigma):
     """
     return np.exp(-x_square / (2 * sigma)) / np.sqrt(2 * np.pi * sigma)
 
-def gradient_magnitude_contrast(img_path, img_blur_path, bins=128, patch_size=11):
-    hist_no_blur = gradient_histogram_span(img_path, patch_size, bins=bins)
-    hist_blur = gradient_histogram_span(img_blur_path, patch_size, bins=bins)
+def gradient_magnitude_contrast(img_path, img_blur_path, bins=512, patch_size=11):
+    img = cv2.imread(img_path, 0)
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+    hist_no_blur = gradient_histogram_span(img, patch_size, bins=bins, blur=False)
+
+    blur_img = cv2.imread(img_blur_path, 0)
+    blur_img = (blur_img - np.min(blur_img)) / (np.max(blur_img) - np.min(blur_img))
+    hist_blur = gradient_histogram_span(blur_img, patch_size, bins=bins, blur=True)
 
     x = np.linspace(0, 0.5, bins)
     plt.plot(x, hist_blur, label='blur', color='red', marker='o', linestyle='-')

@@ -1,8 +1,10 @@
-import numpy as np
 import cv2
-from numba import jit
-from auto_correlation.local_auto_correlation import im2col
 import matplotlib.pyplot as plt
+import numpy as np
+import warnings
+from auto_correlation.local_auto_correlation import im2col
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 """
 生成第一个特征，默认长度为 128 维。使用的公式 eq-1 为：min(ln(K(Bx) + 3), ln(K(By) + 3))，
@@ -12,17 +14,14 @@ im2col 函数的 sliding 模式，因此最终会生成 12321 （111 * 111）个
 出一个值，最后会生成一个 12321 维的 q 向量，然后根据 q 向量计算出直方图 hist(q)（bins 默认为 128），直方图的纵坐标
 就是像素的数量，然后进行归一化，得到的 128 维的特征 hist(q)
 """
-# noinspection PyUnusedLocal,PyShadowingNames
-def local_kurtosis(img_path, patch_size, bins=128):
+# noinspection PyUnusedLocal,PyShadowingNames,PySimplifyBooleanCheck
+def local_kurtosis(img, patch_size, blur=False, bins=512, display=True):
     # 如果是模糊图像，那么使用红色
-    if img_path.find('blur') != -1:
+    if blur == True:
         color = 'red'
     # 如果是清晰图像，那么使用蓝色
     else:
         color = 'blue'
-
-    img = cv2.imread(img_path, 0)
-    img = (img - np.min(img)) / (np.max(img) - np.min(img))
 
     im_height, im_width = img.shape
     # 列差分运算
@@ -38,6 +37,7 @@ def local_kurtosis(img_path, patch_size, bins=128):
     # 类似于 matlab 中的 im2col 函数，这里实现的是其 sliding 模式，即滑动窗口模式
     dx_col = im2col(dx, [patch_size, patch_size])
     dx_col = dx_col / np.sum(dx_col, axis=0)
+
     dy_col = im2col(dy, [patch_size, patch_size])
     dy_col = dy_col / np.sum(dy_col, axis=0)
 
@@ -58,23 +58,31 @@ def local_kurtosis(img_path, patch_size, bins=128):
     # feature = hist(q)，也就是根据得到的 q 向量计算出直方图，然后把直方图的值作为第一个特征向量
     feature, _, _ = plt.hist(q, bins=bins, facecolor=color, range=(0, 18), edgecolor=color, alpha=0.7)
     feature /= np.sum(feature)
-    # 显示横轴标签
-    plt.xlabel('Value of kurtosis')
-    # 显示纵轴标签
-    plt.ylabel('Number of pixels')
-    # 显示图标题
-    plt.title('Kurtosis Feature Response')
-    plt.show()
 
+    if display:
+        # 显示横轴标签
+        plt.xlabel('Value of kurtosis')
+        # 显示纵轴标签
+        plt.ylabel('Number of pixels')
+        # 显示图标题
+        plt.title('Kurtosis Feature Response')
+        plt.show()
+
+    feature[np.isnan(feature).astype('int')] = np.min(feature[(~np.isnan(feature)).astype('int')])
     return feature
 
 """
 用来绘制模糊图像和清晰图像的对比图，具体而言就是得到模糊和清晰图像的特征向量 feature1 = hist(q) 和 feature2，
 然后再绘制 feature1 和 feature2 的对比折线图
 """
-def local_kurtosis_contrast(img_path, blur_img_path, bins=128, patch_size=11):
-    hist_no_blur = local_kurtosis(img_path, patch_size, bins=bins)
-    hist_blur = local_kurtosis(blur_img_path, patch_size, bins=bins)
+def local_kurtosis_contrast(img_path, blur_img_path, bins=512, patch_size=11):
+    img = cv2.imread(img_path, 0)
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))
+    hist_no_blur = local_kurtosis(img, patch_size, bins=bins, blur=False)
+
+    blur_img = cv2.imread(blur_img_path, 0)
+    blur_img = (blur_img - np.min(blur_img)) / (np.max(blur_img) - np.min(blur_img))
+    hist_blur = local_kurtosis(blur_img, patch_size, bins=bins, blur=True)
 
     x = np.linspace(1, bins, bins)
     plt.plot(x, hist_blur, label='blur', color='red', marker='o', linestyle='-')
