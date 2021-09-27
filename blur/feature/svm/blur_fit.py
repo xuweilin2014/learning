@@ -1,11 +1,13 @@
-from sklearn import svm
+import os
+import pickle
+import time
+import matplotlib.pyplot as plt
 import numpy as np
 import sklearn
-import random
+from sklearn import svm
 from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import cross_val_score
-import matplotlib.pyplot as plt
-import os
+
 
 def hog_feature_fit():
     # 1.读取数据集
@@ -13,7 +15,7 @@ def hog_feature_fit():
     data = np.array([])
 
     for npy in os.listdir(path):
-        # 读取 iris.data 文件，其中 converters 是对数据预处理的参数
+        # 读取 iris.KCF 文件，其中 converters 是对数据预处理的参数
         # 其实 converters 是一个字典，表示第 5 列的数据使用函数 iris_label 来进行处理
         npy_path = os.path.join(path, npy)
         npy_data = np.load(os.path.join(path, npy))
@@ -40,13 +42,18 @@ def hog_feature_fit():
     # ravel 的作用就是将数组维度拉成一维数组
     classifier.fit(train_data, train_label.ravel())
 
-    # 4.计算 svc 分类器的准确率
+    # 4.将训练好的 SVM 模型保存到 pickle 文件中
+    model_file = open('model.pickle', 'wb')
+    pickle.dump(classifier, model_file)
+    model_file.close()
+
+    # 5.计算 svc 分类器的准确率
     print('测试集准确率：', classifier.score(test_data, test_label))
     scores = cross_val_score(classifier, train_data, train_label, cv=5)
     print('交叉验证得分：{}'.format(scores))
     print('交叉验证平均得分：{:.3f}'.format(scores.mean()))
 
-    # 5.ROC
+    # 6.ROC
     test_score = classifier.decision_function(test_data)
     fpr, tpr, threshold = roc_curve(test_label, test_score)
     roc_auc = auc(fpr, tpr)
@@ -63,4 +70,29 @@ def hog_feature_fit():
     plt.show()
 
 if __name__ == '__main__':
-    hog_feature_fit()
+    # hog_feature_fit()
+    # 1.读取数据集
+    path = '../data/blur'
+    data = np.array([])
+
+    for npy in os.listdir(path):
+        # 读取 iris.KCF 文件，其中 converters 是对数据预处理的参数
+        # 其实 converters 是一个字典，表示第 5 列的数据使用函数 iris_label 来进行处理
+        npy_path = os.path.join(path, npy)
+        npy_data = np.load(os.path.join(path, npy))
+
+        npy_data[np.where(np.isnan(npy_data))] = 0
+
+        if len(data) == 0:
+            data = npy_data
+        else:
+            data = np.concatenate((data, npy_data), axis=0)
+
+    # 2.划分数据与标签
+    # indices_or_sections 若等于一个 1-D 数组，则会沿着指定的方向进行分割，1-D 数组的元素个数为 n，则数组会被分割成 n + 1 份
+    x, y = data[5, :-1], data[5, -1]
+    with open('model.pickle', 'rb') as f:
+        clsfier = pickle.load(f)
+    t0 = time.time()
+    print(clsfier.predict(np.reshape(x, (1, -1))) == y)
+    print('耗时：' + str(time.time() - t0))
