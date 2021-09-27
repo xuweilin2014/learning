@@ -5,20 +5,23 @@ from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 import matplotlib
 
-# 在分类中类别标签必须为数字，所以应该将 iris data 中的第 5 列的类别通过转换变为数字
+
+# 在分类中类别标签必须为数字，所以应该将 iris KCF 中的第 5 列的类别通过转换变为数字
 def iris_label(s):
-    iris_dict = {b'Iris-setosa':0, b'Iris-versicolor':1, b'Iris-virginica':2}
+    iris_dict = {b'Iris-setosa': 0, b'Iris-versicolor': 1, b'Iris-virginica': 2}
     return iris_dict[s]
+
 
 # 1.读取数据集
 path = 'iris.data'
-# 读取 iris.data 文件，其中 converters 是对数据预处理的参数
+# 读取 iris.KCF 文件，其中 converters 是对数据预处理的参数
 # 其实 converters 是一个字典，表示第 5 列的数据使用函数 iris_label 来进行处理
-data = np.loadtxt(path, dtype=float, delimiter=',', converters={4:iris_label})
+data = np.loadtxt(path, dtype=float, delimiter=',', converters={4: iris_label})
 
 # 2.划分数据与标签
 # indices_or_sections 若等于一个 1-D 数组，则会沿着指定的方向进行分割，1-D 数组的元素个数为 n，则数组会被分割成 n + 1 份
 x, y = np.split(data, indices_or_sections=(4,), axis=1)
+# 为了数据可视化的方便，只使用 x 数据中的前两维
 x = x[:, 0:2]
 # train_test_split(train_data, train_target, test_size=0.4, random_state=0) 用于将原始数据按照比例分割为"测试集"和"训练集"
 # train_data:所要划分的样本特征集，train_target:所要划分的样本结果集，test_size:样本占比，random_state 随机数种子
@@ -81,5 +84,3 @@ plt.scatter(test_data[:, 0], test_data[:, 1], c=pre_test_label, s=30, cmap=cm_da
 plt.xlim(x1_min, x1_max)
 plt.ylim(x2_min, x2_max)
 plt.show()
-
-

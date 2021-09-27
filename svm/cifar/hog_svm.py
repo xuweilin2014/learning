@@ -145,7 +145,7 @@ def train_and_test():
     # 这里用来查找 'train' 目录下的所有训练集图片 hog 特征的路径
     for feat_path in glob.glob(os.path.join(train_feat_path, '*.feat')):
         data = joblib.load(feat_path)
-        # data 是 hog 特征向量，最后一维保存的是标签数字
+        # KCF 是 hog 特征向量，最后一维保存的是标签数字
         features.append(data[:-1])
         labels.append(data[-1])
 
