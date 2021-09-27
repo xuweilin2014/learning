@@ -91,8 +91,11 @@ def main():
     d = mp.Manager().dict()
     lock = mp.Manager().Lock()
 
+    # 考虑到图片数目，避免特征数据超过内存容量，将图片分为 works 个部分，然后每一个部分保存为一个文件
+    # 文件名为第一个图片的名称
     for id_list in np.array_split(np.arange(0, limit), works):
         d['blur'] = np.array([])
+        # 使用进程池来生成数据，默认最大进程个数为 cpu_count
         with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
             for i in id_list:
                 executor.submit(generate_feature, i, d, lock)
