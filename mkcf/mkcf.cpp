@@ -38,10 +38,10 @@ long currentFrame = frameToStart;
 // 3.3_Sherbrooke.avi
 // 4.4_StMarc.avi
 // 5.5_levesque.mov
-char filename[100] = "video/rouen_video.avi";
+//char filename[100] = "video/rouen_video.avi";
 //char filename[100] = "video/atrium_video.avi";
 //char filename[100] = "video/sherbrooke_video.avi";
-//char filename[100] = "video/stmarc_video.avi";
+char filename[100] = "video/stmarc_video.avi";
 //char filename[100] = "video/levesque_video.mov";
 
 // Parameters for tracking and counting
@@ -53,7 +53,7 @@ Mat gray, gray_prev, frame;
 vector<Rect> boundRect_inFrame;         
 // save objects' ID
 // 用来保存当前帧中目标的 id，目标 id 由全局变量 obj_num 来生成
-vector<int> boundRect_labelinFrame;
+vector<int> boundRect_labelinFrame;     
 // objects not visible for 8 frames will be discarded
 // delay_toDeleteinFrame 列表中记录的就是各个 kcf tracker 没有匹配的帧数，
 // 当无匹配的帧数达到 8 时，就认为这个物体已经离开了画面
@@ -62,11 +62,7 @@ vector<int> delay_toDeleteinFrame;
 // 当不同的 kcf tracker 在当前帧中互相遮挡时，也就是一个 COR 对应着多个 TO,
 // 比如 kcf tracker[0], kcf tracker[2] 互相遮挡，在新一帧中，(COR)i 所占的面积等于 (TO)0、(TO)2
 // 因此，我们需要把 group_whenOcclusion[0] = group_whenOcclusion[2] = Boundrect[i]
-// 而 Boundrect[i] 赋值给了 boundRect_inFrame[i] 又赋值给了 tracker->update，而 update 方法会更新目标的位置
-// group_whenOcclusion 列表保存的就是当前互相遮挡的物体 kcf tracker 在当前帧更新后的位置 bounding box
-vector<Rect2d> group_whenOcclusion;
-// objects' substantially overlap for 8 frames will be discarded
-// vector<int> KCF_occlusionTime;      
+vector<Rect2d> group_whenOcclusion; 
 // save ID's will be reused in the future
 vector<int> turn_back;              
 // save objects' KCF trackers
@@ -100,19 +96,9 @@ bool CentroidCloseEnough(Point a, Point b) {
 	return (((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)) < Segment_merge);
 }
 
-// another strategy for merging segments
-bool isOverlapping(Rect rc, Rect rc2) {
-	Rect rc1;
-	rc1.x = rc.x - 5;
-	rc1.y = rc.y - 5;
-	rc1.width = rc.width + 5;
-	rc1.height = rc.height + 5;
-	return (rc1.x + rc1.width > rc2.x) && (rc2.x + rc2.width > rc1.x) && (rc1.y + rc1.height > rc2.y) && (rc2.y + rc2.height > rc1.y);
-}
-
 // calculate overlap rate of two blobs with the first blob.
-float bbOverlap(const Rect &box1, const Rect &box2)
-{
+float bbOverlap(const Rect &box1, const Rect &box2){
+
 	if (box1.x > box2.x + box2.width) { return 0.0; }
 	if (box1.y > box2.y + box2.height) { return 0.0; }
 	if (box1.x + box1.width < box2.x) { return 0.0; }
@@ -123,38 +109,14 @@ float bbOverlap(const Rect &box1, const Rect &box2)
 	float area1 = box1.width*box1.height;
 	float area2 = box2.width*box2.height;
 	return (intersection / area1);
-}
 
-// this mask is only for video Rene
-void MyPolygon(Mat& img)
-{
-	/** Create some points */
-	Point rook_points[1][20];
-	rook_points[0][0] = Point(628, 95);
-	rook_points[0][1] = Point(780, 105);
-	rook_points[0][2] = Point(718, 501);
-	rook_points[0][3] = Point(1279, 544);
-	rook_points[0][4] = Point(1279, 636);
-	rook_points[0][5] = Point(727, 600);
-	rook_points[0][6] = Point(727, 720);
-	rook_points[0][7] = Point(233, 720);
-	rook_points[0][8] = Point(329, 560);
-	rook_points[0][9] = Point(270, 542);
-	rook_points[0][10] = Point(290, 485);
-	rook_points[0][11] = Point(387, 468);
-
-	const Point* ppt[1] = { rook_points[0] };
-	int npt[] = { 12 };
-
-	fillPoly(img, ppt, npt, 1, Scalar(255, 255, 255), 8);
-	polylines(img, ppt, npt, 1, 1, CV_RGB(0, 0, 0), 2, 8, 0);
 }
 
 // calculate the centroid/gravity center
 // 参考文献 http://webdoc.sub.gwdg.de/ebook/serien/ah/UU-CS/2001-57.pdf 中 gravity center 的计算方式
 // 即将目标矩形 area 中所有属于目标 A 的点的 x 坐标和 y 坐标分别相加，再除以目标 A 中的像素总的个数:
 // (sum(A 的 x 坐标) + sum(A 的 y 坐标)) / card(A)，card(A) 用来求出 A 目标区域的像素个数
-Point aoiGravityCenter(Mat &src, Rect area){
+Point aoiGravityCenter(Mat &src, Rect area) {
 
 	float sumx = 0, sumy = 0;
 	float num_pixel = 0;
@@ -249,11 +211,14 @@ void delete_obj(vector<int> &Find_Tracker, vector<int> &add_this_frame, int i) {
 	group_whenOcclusion.erase(group_whenOcclusion.begin() + i);
 	Find_Tracker.erase(Find_Tracker.begin() + i);
 
+	// 删除掉这个 kcf tracker
 	tracker_vector[i].release();
 	tracker_vector.erase(tracker_vector.begin() + i);
 
 	showMsg.erase(showMsg.begin() + i);
+	// 删除这个 tracker 的轨迹列表
 	BoundRect_save.erase(BoundRect_save.begin() + i);
+	// 删除这个 tracker 的出现的帧数列表
 	Rectsave_Frame.erase(Rectsave_Frame.begin() + i);
 	add_this_frame.erase(add_this_frame.begin() + i);
 }//delete
@@ -325,7 +290,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 	// create properties for each object appears in this frame
 	// prevNo_obj 为 1 表示前一帧中没有物体
 	if (prevNo_obj == 1) {
-		for (int i = 0; i < Boundrect.size(); i++){
+		for (int i = 0; i < Boundrect.size(); i++) {
 			// 前一帧里面没有物体，因此为这一帧新出现的目标创建对应的跟踪器 kcf tracker
 			// 并且创建两个一维列表，分别用来保存被跟踪的物体轨迹和物体的出现的帧数
 			Create_new_obj(Boundrect[i]);
@@ -412,6 +377,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 					delay_toDeleteinFrame[within_label[j]] = 0;
 
 					float save = bbOverlap(Boundrect[i], boundRect_inFrame[within_label[j]]);
+
 					// find the best matching object.
 					if (save > max) {
 						max = save;
@@ -450,7 +416,6 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 						rectangle(frame, boundRect_inFrame[within_label[j]], Scalar(255, 0, 0), 2, 1);
 					}// if
 				}// for
-
 			}// occlusion occurs
 
 			/************************ Object tracking alone  *****************************/
@@ -478,7 +443,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 				float area_previous = boundRect_inFrame[label].width * boundRect_inFrame[label].height;
 
 				// 如果 Tol <= (A(TOi)t / A(CORi)t) <= Toh 的话，说明 BGS 因为碎片化（segmentation），就认为 (TOi)t 更可信，
-				// 否则，就认为 (CORi)t 更可信，即使用 BGS 提取到的目标位置和大小
+				// 否则，就认为 (CORi)t 更可信，即使用 BGS 提取到的目标位置和大小，Tol = 1.4，Toh = 1.8
 				if ((area_previous >= 1.4 * area_new) && (area_previous <= 1.8 * area_new)) {
 					// 这里的 boundRect_inFrame[within_label[i]] 表示为 kcf tracker 在当前帧的目标位置 (TOi)t
 					// 使用 (TOi)t 来对 kcf tracker 进行更新, 不过使用 (TOi)t 来对 kcf tracker 进行更新不能让 kcf tracker 拥有尺度自适应的功能
@@ -516,7 +481,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 					// save rect
 					// 保存 kcf tracker 跟踪的目标的轨迹
 					BoundRect_save[label].insert(BoundRect_save[label].end(), boundRect_inFrame[label]);
-					rectangle(frame, Boundrect[i], Scalar(255, 0, 0), 2, 1);
+					rectangle(frame, boundRect_inFrame[label], Scalar(255, 0, 0), 2, 1);
 				}//if
 
 			}// end if  object tracking alone
@@ -524,7 +489,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 			/************** With no trackers match *****************/
 			/********** firstly, we try to figure out whether two KCF trackers are tracking the same object or not. ***********/
 			// 当 Boundrect[i] 没有任何 kcf tracker 和它进行匹配时，即 KCF_Num_Blob[i] = 0，有以下三种可能：
-			// 1.Boundrect[i] 是上一帧中两个互相遮挡的物体的其中一个，在这一帧中，两个 kcf tracker 只跟踪了另外一个物体
+			// 1.Boundrect[i] 是上一帧中两个互相遮挡的物体的其中一个，而在这一帧中，两个 kcf tracker 只跟踪了另外一个物体
 			// 2.Boundrect[i] 是上一帧中某一个目标的 BGS 碎片（segmentation），这是由于背景模型通常不能很好地处理光照、环境等的突然变化
 			// 3.Boundrect[i] 是一个新出现的物体
 
@@ -579,6 +544,7 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 								if (max > 0) {
 									/// deliver the second KCF tracker to it.
 									if (bbOverlap(Boundrect[bound_find], boundRect_inFrame[tracker_overlap[0]]) > bbOverlap(Boundrect[bound_find], boundRect_inFrame[tracker_overlap[1]])){
+										// deliver_tracker 根据 tracker_overlap 中的 tracker index 和新的 COR 位置重新生成一个 kcf tracker，下面类似
 										deliver_tracker(tracker_overlap[1], Boundrect[i]);
 									}
 									/// deliver the first KCF tracker to it.
@@ -611,7 +577,8 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 					Create_new_obj(Boundrect[i]);
 					Find_Tracker.insert(Find_Tracker.end(), i);
 					add_this_frame.insert(add_this_frame.end(), 0);
-					KCF_match.insert(KCF_match.end(), boundRect_inFrame.size(), 0);
+					// KCF_match.insert(KCF_match.end(), boundRect_inFrame.size(), 0);
+					KCF_match.insert(KCF_match.end(), 0);
 				}// if
 
 			}// else
@@ -641,13 +608,9 @@ void KCF_tracker(Mat &frame, vector<Rect2d> Boundrect, vector<Point2f> Centroids
 				i++; 
 			}
 		}
+	}// not init status
 
-		/// find out redundant KCF tracker that overlap substantially.
-		vector<int> calculated;
-		calculated.insert(calculated.end(), boundRect_inFrame.size(), 0);
-
-	}//not init status
-
+	// 显示那些暂时画面不可见（invisible）的目标，即 Find_Tracker[i] == -1，也就是 kcf tracker 在当前帧中没有找到匹配的 BGS
 	for (int i = 0; i < boundRect_inFrame.size(); i++) {
 		if (delay_toDeleteinFrame[i] != 0)
 			rectangle(frame, boundRect_inFrame[i], Scalar(255, 0, 0), 2, 1);
@@ -664,7 +627,6 @@ int main() {
 	// 从 filename 读取视频流
 	cv::VideoCapture capture(filename);
 	capture.set(cv::CAP_PROP_POS_FRAMES, currentFrame);
-
 
 	if (!capture.isOpened()){
 		cout << "load video fails." << endl;
@@ -706,17 +668,17 @@ int main() {
 		// sprintf_s 是一个函数，其函数功能是将数据格式化输出到字符串, sprintf_s 对于格式化 string 中的格式化的字符的有效性进行了检查
 		// 所以下面这个函数，就是将地址 F:/visual studio/repo/MKCF/MKCF/rouen_bgs/%08d.png 中 %08d 替换成 currentFrame 的数
 		// 比如替换成 F:/visual studio/repo/MKCF/MKCF/rouen_bgs/00000150.png，获取到地址后就可以读取 bg 图片
-		sprintf_s(filepath, 500, "F:/visual studio/repo/MKCF/MKCF/bgs/rouen_bgs/%08d.png", currentFrame);// rouen
-
+		sprintf_s(filepath, 500, "F:/visual studio/repo/MKCF/MKCF/bgs/stmarc_bgs/%08d.png", currentFrame);
+		// sprintf_s(filepath, 500, "F:/visual studio/repo/MKCF/MKCF/bgs/rouen_bgs/%08d.png", currentFrame); // rouen
 		// add mask for rene video
-		// 读取对应视频流的背景模型图片，即 background substraction
+		// 读取对应视频流的背景模型图片，即 background subtraction
 		Mat foreground = imread(filepath, CV_8U);
 
 		//two dimensional Points
 		vector<vector<Point>> contours;  
 
 		// findContours：函数用来检测物体轮廓
-		// countours：是一个双重向量，向量内每个元素保存了一组由连续的 Point 构成的点的集合的向量，每一组点集就是一个轮廓，有多少轮廓，contours就有多少元素；
+		// countours：是一个双重向量，向量内每个元素保存了一组由连续的 Point 构成的点的集合的向量，每一组点集就是一个轮廓，有多少轮廓，contours 就有多少元素；
 		// cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE：即只检测最外层轮廓，并且保存轮廓上所有点
 		findContours(foreground, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE, Point(0, 0));
 		
@@ -807,10 +769,13 @@ int main() {
 		// 使用多个 KCF 滤波器进行多目标跟踪
 		KCF_tracker(frame, boundRect, centroid);
 
+		// 在所有的 kcf tracker 的跟踪框中左上角显示出这个跟踪器的 id
 		for (int i = 0; i < boundRect_inFrame.size(); i++) {
-			putText(frame, showMsg[i], cv::Point(boundRect_inFrame[i].x, boundRect_inFrame[i].y + boundRect_inFrame[i].height * 0.5), cv::FONT_HERSHEY_COMPLEX, 0.7, Scalar(255, 255, 255));
+			// putText(frame, showMsg[i], cv::Point(boundRect_inFrame[i].x, boundRect_inFrame[i].y + boundRect_inFrame[i].height * 0.5), cv::FONT_HERSHEY_COMPLEX, 0.7, Scalar(255, 255, 255));
+			putText(frame, showMsg[i], cv::Point(boundRect_inFrame[i].x + 6, boundRect_inFrame[i].y + 15), cv::FONT_HERSHEY_DUPLEX, 0.5, Scalar(255, 255, 255));
 		}
 
+		// 在画面中显示出所有的 BGS 目标框
 		for (int i = 0; i < boundRect.size(); i++) {
 			rectangle(frame, boundRect[i].tl(), boundRect[i].br(), Scalar(100, 255, 0), 2, 8, 0);
 		}
@@ -818,7 +783,7 @@ int main() {
 		imshow("Original video", frame);
 		imshow("foreground", foreground);
 
-		//Esc to quit.
+		// Esc to quit.
 		int c = cv::waitKey(delay);
 
 		if ((char)c == 27 || currentFrame >= frameToStop) {
@@ -840,7 +805,7 @@ label:
 		if (BoundRect_save[i].size() >= 5) {
 			SaveToXML(i);
 		}
-	}//for
+	}// for
 	ofstream outdata;
 	outdata.open("bool.txt", ios::app);//ios::app是尾部追加的意思
 	outdata << "</Video>";
@@ -851,4 +816,4 @@ label:
 	cout << "total_time=" << totaltime << "ms" << endl;
 	cout << "--------------------------------------------------------------------------------";
 
-}//main
+}// main
