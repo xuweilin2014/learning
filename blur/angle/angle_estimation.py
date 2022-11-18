@@ -310,10 +310,10 @@ def local_binary_pattern(img, radius=3, neighbors=8, span=15):
 
 if __name__ == '__main__':
     # 直接读为灰度图像
-    original_img = cv2.imread('imgs/peppers.jpg')
-    img_bgr = cv2.imread('imgs/peppers_60.jpg')
+    original_img = cv2.imread('output/peppers.jpg')
+    img_bgr = cv2.imread('output/peppers_60.jpg')
     cv2.imshow('bgr', img_bgr)
-    img = cv2.imread('imgs/peppers_60.jpg', 0)
+    img = cv2.imread('output/peppers_60.jpg', 0)
     # 在时域对图像加上汉宁窗，否则在计算 fft 过程中，由于周期延拓造成图像边缘像素的不连续，
     # 在图像的频谱图中会产生亮十字线，影响到对运动角度的检测
     img = img * window('hann', img.shape)
