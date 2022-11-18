@@ -31,6 +31,7 @@
     + [local_binary_pattern](https://github.com/xuweilin2014/learning/blob/master/local_binary_pattern/local_binary_pattern.py)：LBP 特征的实现
 + [Mean Shift 跟踪算法](https://github.com/xuweilin2014/learning/blob/master/mean_shift_tracking/mean_shift_tracker.py)
 + MKCF
-    + [MKCF](https://github.com/xuweilin2014/learning/blob/master/mkcf/mkcf.py)：多 KCF 跟踪器的实现与运用，实现了其 python 版本，参考论文：[Multiple Object Tracking with Kernelized Correlation Filters in Urban Mixed
+    + [mkcf.cpp](https://github.com/xuweilin2014/learning/blob/master/mkcf/mkcf.cpp)：使用多 KCF 跟踪器来实现多目标跟踪，来自论文：[Multiple Object Tracking with Kernelized Correlation Filters in Urban Mixed
 Traffic](https://arxiv.org/abs/1611.02364)
+    + [mkcf.py](https://github.com/xuweilin2014/learning/blob/master/mkcf/mkcf.py)：多 KCF 跟踪器的实现与运用，实现了其 python 版本
 + SVM
